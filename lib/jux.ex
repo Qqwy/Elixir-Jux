@@ -22,33 +22,40 @@ defmodule Jux do
   def process(source) do
     stack = 
       source
-      |> do_process
-      |> :lists.reverse # Top of stack is at head.
+      |> do_process([])
+      #|> :lists.reverse # Top of stack is at head.
   end
 
-  def do_process(""), do: []
-  def do_process(source) do
+  def do_process("", stack), do: stack
+  def do_process(source, stack) do
     whitespace_regexp = ~r{^\s+}
     float_regexp = ~r{^[+-]?\d+\.\d+}
     integer_regexp = ~r{^[+-]?\d+}
-    identifier_regexp = ~r{^[a-z_]\w*}
+    identifier_regexp = ~r{^[a-z_][a-zA-Z_\d?!]*}
 
     cond do
       source =~ whitespace_regexp ->
         [_, rest] = pop_token(source, whitespace_regexp)
-        do_process(rest)
+        do_process(rest, stack)
       String.starts_with?(source, "[") ->
         [quotation, rest] = process_quotation(source)
-        [parse_quotation(quotation) | do_process(rest)]
+        new_stack = parse_quotation(quotation, stack)
+        do_process(rest, new_stack)
       source =~ identifier_regexp ->
         [identifier, rest] = pop_token(source, identifier_regexp)
-        [parse_identifier(identifier) | do_process(rest)]
+        new_stack = parse_identifier(identifier, stack)
+        do_process(rest, new_stack)
+        #[parse_identifier(identifier) | do_process(rest)]
       source =~ float_regexp ->
         [float, rest] = pop_token(source, float_regexp)
-        [parse_float(float) | do_process(rest)]
+        new_stack = parse_float(float, stack)
+        do_process(rest, new_stack)
+        #[parse_float(float) | do_process(rest)]
       source =~ integer_regexp ->
         [integer, rest] = pop_token(source, integer_regexp)
-        [parse_integer(integer) | do_process(rest)]
+        new_stack = parse_integer(integer, stack)
+        do_process(rest, new_stack)
+        #[parse_integer(integer) | do_process(rest)]
       :otherwise ->
         raise "Could not parse rest of source: #{inspect source}"
     end
@@ -63,7 +70,7 @@ defmodule Jux do
     [quotation_length, rest] = do_process_quotation(String.next_codepoint(source), 0, 0)
     quotation = String.slice(source, 1, quotation_length-2)
     IO.inspect [quotation, rest]
-    [do_process(quotation), rest]
+    [Jux.Quotation.new(quotation), rest]
   end
 
   def do_process_quotation(nil, _, _) do
@@ -86,31 +93,35 @@ defmodule Jux do
     do_process_quotation(String.next_codepoint(rest), bracket_count, length_acc+1)
   end
 
-  def parse_integer(str) do
-    str
-    |> String.to_integer
+  def parse_integer(str, stack) do
+    integer = 
+      str
+      |> String.to_integer
+    [integer | stack]
     #|> Jux.ConstantFunction.cf
   end
 
-  def parse_float(str) do
-    str
-    |> String.to_float
+  def parse_float(str, stack) do
+    float = 
+      str
+      |> String.to_float
+    [float | stack]
     #|> Jux.ConstantFunction.cf
   end
 
-  def parse_quotation(quotation) do
-    quotation
-    |> Jux.ConstantFunction.cf
+  def parse_quotation(quotation, stack) do
+    [quotation | stack]
+    #quotation
+    #|> Jux.ConstantFunction.cf
   end
 
-  def parse_identifier(str) do
+  def parse_identifier(str, stack) do
     atom = str |> String.to_existing_atom
     res = Jux.Stdlib.__info__(:functions)[atom]
     if res != 1 do
       raise ArgumentError, "unknown identifier `#{str}`"
     end
-    #apply Jux.Stdlib, atom, []
-    atom
+    apply(Jux.Stdlib, atom, [stack])
   end
 
 end
