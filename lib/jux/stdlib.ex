@@ -68,4 +68,14 @@ defmodule Jux.Stdlib do
 
   def cons([h1, h2 | t]), do: [[h1 | h2] | t]
 
+  def hw(stack) do
+    IO.puts "Hello, world!"
+    stack
+  end
+
+  def puts([h | t]) do
+    IO.puts(h)
+    [t]
+  end
+
 end

@@ -1,23 +1,23 @@
 defmodule Jux do
 
-  def tokenize_source(source) do
-    source
-    |> String.replace("[", "[ ")
-    |> String.replace("]", " ]")
-    |> String.split(~r{\s+})
-    |> Enum.map(&parse_term/1)
-  end
+  # def tokenize_source(source) do
+  #   source
+  #   |> String.replace("[", "[ ")
+  #   |> String.replace("]", " ]")
+  #   |> String.split(~r{\s+})
+  #   |> Enum.map(&parse_term/1)
+  # end
 
-  def parse_term(term) do
-    cond do
-      term =~ ~r{\A\d+\z} -> 
-        String.to_integer(term)
-      term =~ ~r{\A\d+\.\d+\z} -> 
-        String.to_float(term)
-      :otherwise -> 
-        term
-    end
-  end
+  # def parse_term(term) do
+  #   cond do
+  #     term =~ ~r{\A\d+\z} -> 
+  #       String.to_integer(term)
+  #     term =~ ~r{\A\d+\.\d+\z} -> 
+  #       String.to_float(term)
+  #     :otherwise -> 
+  #       term
+  #   end
+  # end
 
   def process(source) do
     stack = 
@@ -31,7 +31,7 @@ defmodule Jux do
     whitespace_regexp = ~r{^\s+}
     float_regexp = ~r{^[+-]?\d+\.\d+}
     integer_regexp = ~r{^[+-]?\d+}
-    identifier_regexp = ~r{^[a-z_][a-zA-Z_\d?!]*}
+    identifier_regexp = ~r{^[a-z][\w?!]*}
 
     cond do
       source =~ whitespace_regexp ->
@@ -40,6 +40,10 @@ defmodule Jux do
       String.starts_with?(source, "[") ->
         [quotation, rest] = process_quotation(source)
         new_stack = parse_quotation(quotation, stack)
+        do_process(rest, new_stack)
+      String.starts_with?(source, "\"") ->
+        [string, rest] = process_string(source)
+        new_stack = parse_string(string, stack)
         do_process(rest, new_stack)
       source =~ identifier_regexp ->
         [identifier, rest] = pop_token(source, identifier_regexp)
@@ -68,7 +72,7 @@ defmodule Jux do
 
   def process_quotation(source) do
     [quotation_length, rest] = do_process_quotation(String.next_codepoint(source), 0, 0)
-    quotation = String.slice(source, 1, quotation_length-2)
+    quotation = String.slice(source, 1, quotation_length - 2)
     IO.inspect [quotation, rest]
     [Jux.Quotation.new(quotation), rest]
   end
@@ -113,6 +117,37 @@ defmodule Jux do
     [quotation | stack]
     #quotation
     #|> Jux.ConstantFunction.cf
+  end
+
+  def process_string(source) do
+    [string_length, rest] = do_process_string(String.next_codepoint(source), 0)
+    string = String.slice(source, 1, string_length - 2)
+    [string, rest]
+  end
+
+  def do_process_string({"\"", rest}, 0) do
+    do_process_string(String.next_codepoint(rest), 1)
+  end
+
+  def do_process_string({"\"", rest}, length) do
+    [length+1, rest]
+  end
+
+  def do_process_string({"\\", rest}, length) do
+    case String.next_codepoint(rest) do
+      {"\"", restrest} ->
+        do_process_string(restrest, length+2)
+      {_, _} ->
+        do_process_string(rest, length+1)
+    end
+  end
+
+  def do_process_string({_, rest}, length) do
+    do_process_string(String.next_codepoint(rest), length+1)
+  end
+
+  def parse_string(str, stack) do
+    [str | stack]
   end
 
   def parse_identifier(str, stack) do
